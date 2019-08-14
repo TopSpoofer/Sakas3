@@ -1,7 +1,7 @@
 
 name := "sakas3"
 version := "0.1"
-scalaVersion := "2.12.4"
+scalaVersion := "2.12.6"
 
 // 基本配置
 scalacOptions := Seq(
@@ -13,8 +13,8 @@ scalacOptions := Seq(
 
 val versions = new {
   val scala = "2.12.4"
-  val akkaVersion = "2.5.13"
-  val akkaHttpVersion = "10.1.1"
+  val akkaVersion = "2.5.24"
+  val akkaHttpVersion = "10.1.9"
   val scalaTestFullVersion = "3.0.3"
   val junitFullVersion = "4.12"
   val scalaMockVersion = "3.6.0"

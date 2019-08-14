@@ -3,13 +3,15 @@ package top.spoofer.sakas3.util
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpHeader, HttpRequest, HttpResponse, StatusCode}
+import akka.pattern.CircuitBreaker
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.stream.{ActorMaterializer, OverflowStrategy, QueueOfferResult}
 import akka.util.ByteString
 import top.spoofer.sakas3.util.HttpClient.HttpClientResponse
 
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContextExecutor, Future, Promise}
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 class HttpClient(host: String,
                  port: Int,
@@ -17,18 +19,31 @@ class HttpClient(host: String,
                  useHttps: Boolean = false,
                  overflowStrategy: OverflowStrategy = OverflowStrategy.backpressure)
                 (implicit actorSystem: ActorSystem, mate: ActorMaterializer, ec: ExecutionContextExecutor) {
-  private val client: (HttpRequest) => Future[HttpResponse] = createHttpClient(host, port, queueSize, useHttps, overflowStrategy)
+  private val client: HttpRequest => Future[HttpResponse] = createHttpClient(host, port, queueSize, useHttps, overflowStrategy)
+  private val breaker = new CircuitBreaker(
+    actorSystem.scheduler,
+    maxFailures = 5,
+    callTimeout = 16.seconds,
+    resetTimeout = 16.seconds
+  )
 
   def send(request: HttpRequest): Future[HttpClientResponse] = {
-    for {
+    val f = for {
       response <- client(request)
       entity <- response.entity.dataBytes.runFold(ByteString.empty)(_ ++ _)
     } yield {
       HttpClientResponse(response.status, entity, response.headers)
     }
+    breaker.withCircuitBreaker(f, responseAsFailure)
   }
 
-  def sendRaw(request: HttpRequest): Future[HttpResponse] = client(request)
+  def sendRaw(request: HttpRequest): Future[HttpResponse] = {
+    breaker.withCircuitBreaker(client(request), rawResponseAsFailure)
+  }
+
+  def circuitBreakerIsClosed: Boolean = breaker.isClosed || breaker.isHalfOpen
+
+  def clientInfo: String = s"$host:$port"
 
   private def clientCachedPool[A](host: String, port: Int, https: Boolean = false)(implicit mat: ActorMaterializer) = {
     if (https) Http().cachedHostConnectionPoolHttps[A](host, port)
@@ -39,7 +54,7 @@ class HttpClient(host: String,
                                port: Int,
                                queueSize: Int,
                                useHttps: Boolean,
-                               overflowStrategy: OverflowStrategy): (HttpRequest) => Future[HttpResponse] = {
+                               overflowStrategy: OverflowStrategy): HttpRequest => Future[HttpResponse] = {
     val sourceQueue = Source.queue[(HttpRequest, Promise[HttpResponse])](queueSize, overflowStrategy)
       .via(clientCachedPool(host, port, useHttps))
       .toMat(Sink.foreach {
@@ -59,6 +74,16 @@ class HttpClient(host: String,
     }
 
     handleRequest
+  }
+
+  private val responseAsFailure: Try[HttpClientResponse] => Boolean = {
+    case Success(response) => response.status.intValue() >= 500
+    case Failure(_) => true
+  }
+
+  private val rawResponseAsFailure: Try[HttpResponse] => Boolean = {
+    case Success(response) => response.status.intValue() >= 500
+    case Failure(_) => true
   }
 }
 

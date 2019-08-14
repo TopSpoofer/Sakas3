@@ -10,6 +10,8 @@ import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContextExecutor}
 import java.io.{File, InputStream}
 
+import top.spoofer.sakas3.commons.S3Cluster
+
 object TestS3Main {
   implicit val system: ActorSystem = ActorSystem("SakaClientTest")
   implicit val dispatcher: ExecutionContextExecutor = system.dispatcher
@@ -21,10 +23,15 @@ object TestS3Main {
   val sakaFile = SakaFile("rawname_ppp", Source.single(ByteString(data)), data.length)
   val newBucket = "test2"
   //if qingyun stroage use AuthKeys("xxx", "xx", endpoint = s3.youdomain.com)
-  val client = new SakaS3Client("localhost", 9000, AuthKeys("12345678", "12345678"))
+  val client = SakaS3Client(
+    S3Cluster(("localhost", 9001), ("localhost", 9002), ("localhost", 9003)),
+    AuthKeys("spoofer", "12345678*")
+  )
 
   def main(args: Array[String]): Unit = {
-    objectState()
+    Range(0, 5) foreach { _ =>
+      listObjects()
+    }
     system.terminate()
   }
 

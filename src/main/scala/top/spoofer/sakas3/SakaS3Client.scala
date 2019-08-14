@@ -5,22 +5,22 @@ import java.io.{File, FileInputStream, InputStream}
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.StreamConverters
+import top.spoofer.sakas3.commons.S3Cluster
 import top.spoofer.sakas3.s3v4.apis.BucketManager.Bucket
 import top.spoofer.sakas3.s3v4.apis.ObjectDownloader.DownloadResult
 import top.spoofer.sakas3.s3v4.apis.{BucketManager, ObjectDownloader, ObjectManager, ObjectUploader}
 import top.spoofer.sakas3.s3v4.apis.ObjectUploader.UploadResult
 import top.spoofer.sakas3.s3v4.commons._
 import top.spoofer.sakas3.util.HttpClient
-
+import language._
 import scala.concurrent.{ExecutionContextExecutor, Future}
 
-class SakaS3Client(host: String,
-                   port: Int,
+class SakaS3Client(s3Cluster: S3Cluster,
                    authKeys: AuthKeys,
-                   useHttps: Boolean = false,
-                   queueSize: Int = 2048,
-                   blockSize: Int = 1048576)
-                  (implicit actorSystem: ActorSystem, mate: ActorMaterializer, ec: ExecutionContextExecutor) {
+                   blockSize: Int)
+                  (implicit actorSystem: ActorSystem,
+                   mate: ActorMaterializer,
+                   ec: ExecutionContextExecutor) {
   /**
     * put a stream's object to s3 server
     *
@@ -217,10 +217,57 @@ class SakaS3Client(host: String,
     objectManager.objectState(bucket, objectName)
   }
 
-  private val client = HttpClient(host, port, queueSize, useHttps)
-  private val s3RequestFactory = new S3RequestFactory(authKeys)
-  private val uploader = ObjectUploader(client, s3RequestFactory, blockSize)
-  private val downloader = ObjectDownloader(client, s3RequestFactory)
-  private val bucketManager = BucketManager(client, s3RequestFactory)
-  private val objectManager = ObjectManager(client, s3RequestFactory)
+  private def client: HttpClient = this.synchronized {
+    var i = 0
+    var ret: Option[HttpClient] = None
+    while (i < clusterSize && ret.isEmpty) {
+      if (s3Clients(cursor).circuitBreakerIsClosed) ret = Some(s3Clients(cursor))
+      cursor = cursor + 1
+      if (cursor >= clusterSize) cursor = 0
+      i = i + 1
+    }
+    ret getOrElse s3Clients.head
+  }
+
+  @volatile
+  private var cursor = 0
+  private val s3Clients = s3Cluster.servers.toSeq map { server =>
+    HttpClient(server.host, server.port, server.queueSize, server.useHttps)
+  } toArray
+  private val clusterSize = s3Cluster.servers.size
+  private def s3RequestFactory = new S3RequestFactory(authKeys)
+  private def uploader = ObjectUploader(client, s3RequestFactory, blockSize)
+  private def downloader = ObjectDownloader(client, s3RequestFactory)
+  private def bucketManager = BucketManager(client, s3RequestFactory)
+  private def objectManager = ObjectManager(client, s3RequestFactory)
+}
+
+object SakaS3Client {
+  val BlockSize = 1048576
+
+  def apply(host: String,
+            port: Int,
+            authKeys: AuthKeys)
+           (implicit actorSystem: ActorSystem,
+            mate: ActorMaterializer,
+            ec: ExecutionContextExecutor): SakaS3Client = {
+    new SakaS3Client(S3Cluster((host, port)), authKeys, BlockSize)
+  }
+
+  def apply(s3Cluster: S3Cluster,
+            authKeys: AuthKeys)
+           (implicit actorSystem: ActorSystem,
+            mate: ActorMaterializer,
+            ec: ExecutionContextExecutor): SakaS3Client = {
+    new SakaS3Client(s3Cluster, authKeys, BlockSize)
+  }
+
+  def apply(s3Cluster: S3Cluster,
+            authKeys: AuthKeys,
+            blockSize: Int)
+           (implicit actorSystem: ActorSystem,
+            mate: ActorMaterializer,
+            ec: ExecutionContextExecutor): SakaS3Client = {
+    new SakaS3Client(s3Cluster, authKeys, blockSize)
+  }
 }

@@ -36,13 +36,13 @@ object TestS3Main {
   }
 
   private def filePut(): Unit = {
-    val resultFuture = client.putObject(bucket, "filePut", new File(fileName), S3MetaData.DefaultS3MetaData)
+    val resultFuture = client.putObject(bucket, "filePut", new File(fileName), S3MetaData.empty)
     val result = Await.result(resultFuture, 8.seconds)
     println(result)
   }
 
   private def streamPut(): Unit = {
-    val resultFuture = client.putObject(bucket, "streamPut", sakaFile, S3MetaData.DefaultS3MetaData)
+    val resultFuture = client.putObject(bucket, "streamPut", sakaFile, S3MetaData.empty)
     val result = Await.result(resultFuture, 8.seconds)
     println(result)
   }
@@ -50,7 +50,7 @@ object TestS3Main {
   private def fileInputStreamPut(): Unit = {
     import java.io.FileInputStream
     val fis = new FileInputStream(new File(fileName))
-    val resultFuture = client.putObject(bucket, "fileInputStreamPut", fis, S3MetaData.DefaultS3MetaData, "README")
+    val resultFuture = client.putObject(bucket, "fileInputStreamPut", fis, S3MetaData.empty, "README")
     val result = Await.result(resultFuture, 8.seconds)
     println(result)
   }
@@ -59,7 +59,7 @@ object TestS3Main {
     import java.io.FileInputStream
     val file = new File(fileName)
     val fis: InputStream = new FileInputStream(file)
-    val resultFuture = client.putObject(bucket, "inputStreamPut", fis, file.length(), S3MetaData.DefaultS3MetaData, "README")
+    val resultFuture = client.putObject(bucket, "inputStreamPut", fis, file.length(), S3MetaData.empty, "README")
     val result = Await.result(resultFuture, 8.seconds)
     println(result)
   }
@@ -67,7 +67,7 @@ object TestS3Main {
   private def downloadSuccess(): Unit = {
     val resultFuture = client.getObject(bucket, "filePut")
     val result = Await.result(resultFuture, 8.seconds)
-    val entityFuture = result.content.runFold(ByteString.empty)(_ ++ _)
+    val entityFuture = result.result.right.get.content.runFold(ByteString.empty)(_ ++ _)
     val entity = Await.result(entityFuture, 8.seconds)
     println(result)
     println(entity.utf8String)
@@ -103,37 +103,37 @@ object TestS3Main {
     println(result)
   }
 
-  private def deleteObjects() = {
+  private def deleteObjects(): Unit = {
     val retFuture = client.deleteObjects(bucket, Set("1.txt", "2.txt", "3.txt"))
     val result = Await.result(retFuture, 8.seconds)
     println(result)
   }
 
-  private def deleteObject() = {
+  private def deleteObject(): Unit = {
     val retFuture = client.deleteObject(bucket, "filePut")
     val result = Await.result(retFuture, 8.seconds)
     println(result)
   }
 
-  private def listObjects() = {
+  private def listObjects(): Unit = {
     val retFuture = client.listObjects(bucket)
     val result = Await.result(retFuture, 8.seconds)
     println(result)
   }
 
-  private def listIncompleteObjects() = {
+  private def listIncompleteObjects(): Unit = {
     val retFuture = client.listIncompleteObjects(bucket, "")
     val result = Await.result(retFuture, 8.seconds)
     println(result)
   }
 
-  private def copyObject() = {
+  private def copyObject(): Unit = {
     val retFuture = client.copyObject(bucket, "fileInputStreamPut", newBucket, "new_object")
     val result = Await.result(retFuture, 8.seconds)
     println(result)
   }
 
-  private def objectState() = {
+  private def objectState(): Unit = {
     val retFuture = client.objectState(bucket, "fileInputStreamPut1")
     val result = Await.result(retFuture, 8.seconds)
     println(result)

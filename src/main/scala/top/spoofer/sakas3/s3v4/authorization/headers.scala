@@ -8,7 +8,7 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 object `X-Amz-Date` extends ModeledCustomHeaderCompanion[`X-Amz-Date`] {
-  def dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("YYYYMMdd'T'HHmmssX") //todo refactor
+  def dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("YYYYMMdd'T'HHmmssX")
 
   override def name: String = "x-amz-date"
 

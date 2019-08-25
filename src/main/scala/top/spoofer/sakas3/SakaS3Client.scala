@@ -3,6 +3,7 @@ package top.spoofer.sakas3
 import java.io.{File, FileInputStream, InputStream}
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.HttpHeader
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.StreamConverters
 import top.spoofer.sakas3.commons.S3Cluster
@@ -12,6 +13,7 @@ import top.spoofer.sakas3.s3v4.apis.{BucketManager, ObjectDownloader, ObjectMana
 import top.spoofer.sakas3.s3v4.apis.ObjectUploader.UploadResult
 import top.spoofer.sakas3.s3v4.commons._
 import top.spoofer.sakas3.util.HttpClient
+
 import language._
 import scala.concurrent.{ExecutionContextExecutor, Future}
 
@@ -94,14 +96,12 @@ class SakaS3Client(s3Cluster: S3Cluster,
   /**
     * download an object from s3 server
     *
-    * when http status not ok, will return Future[SakaS3Exception]
-    *
     * @param bucket bucket name
     * @param objectName object name in s3 server
     * @return
     */
-  def getObject(bucket: String, objectName: String): Future[DownloadResult] = {
-    downloader.getObject(bucket, objectName)
+  def getObject(bucket: String, objectName: String, extraHeaders: Seq[HttpHeader] = Nil): Future[DownloadResult] = {
+    downloader.getObject(bucket, objectName, extraHeaders)
   }
 
   /**

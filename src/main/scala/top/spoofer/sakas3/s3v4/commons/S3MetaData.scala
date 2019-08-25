@@ -54,6 +54,6 @@ object S3MetaData {
     new S3MetaData(Map(hs: _*))
   }
 
-  val DefaultS3MetaData = new S3MetaData(Map.empty)
+  val empty = new S3MetaData(Map.empty)
 }
 
